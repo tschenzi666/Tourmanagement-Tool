@@ -1,0 +1,840 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================================
+// AUTH & USER MODELS (Auth.js Prisma Adapter)
+// ============================================================
+
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String    @unique
+  emailVerified DateTime?
+  image         String?
+  phone         String?
+  password      String?
+
+  accounts Account[]
+  sessions Session[]
+
+  teamMemberships TeamMember[]
+  tourAssignments TourCrewMember[]
+  createdTours    Tour[]           @relation("TourCreatedBy")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("users")
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@map("accounts")
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("sessions")
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+  @@map("verification_tokens")
+}
+
+// ============================================================
+// TEAM & MEMBERSHIP
+// ============================================================
+
+enum TeamRole {
+  OWNER
+  ADMIN
+  MANAGER
+  MEMBER
+  VIEWER
+}
+
+model Team {
+  id          String  @id @default(cuid())
+  name        String
+  slug        String  @unique
+  description String?
+  logoUrl     String?
+
+  // Branding
+  brandColor        String?
+  brandFont         String?
+  showLogoInSidebar Boolean @default(true)
+  showLogoInPrint   Boolean @default(true)
+
+  members     TeamMember[]
+  invitations TeamInvitation[]
+  tours       Tour[]
+  contacts    Contact[]
+  venues      Venue[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("teams")
+}
+
+model TeamMember {
+  id   String   @id @default(cuid())
+  role TeamRole @default(MEMBER)
+
+  userId String
+  teamId String
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  team Team @relation(fields: [teamId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, teamId])
+  @@map("team_members")
+}
+
+model TeamInvitation {
+  id        String    @id @default(cuid())
+  token     String    @unique @default(cuid())
+  email     String?
+  role      TeamRole  @default(MEMBER)
+  teamId    String
+  team      Team      @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  createdBy String
+  expiresAt DateTime
+  usedAt    DateTime?
+  usedBy    String?
+  createdAt DateTime  @default(now())
+
+  @@map("team_invitations")
+}
+
+// ============================================================
+// TOUR
+// ============================================================
+
+enum TourStatus {
+  DRAFT
+  CONFIRMED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+model Tour {
+  id          String     @id @default(cuid())
+  name        String
+  artist      String?
+  status      TourStatus @default(DRAFT)
+  description String?    @db.Text
+  startDate   DateTime?
+  endDate     DateTime?
+  currency    String     @default("USD")
+  timezone    String     @default("America/New_York")
+  color       String?
+
+  teamId      String
+  createdById String
+
+  team      Team @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  createdBy User @relation("TourCreatedBy", fields: [createdById], references: [id])
+
+  tourDays      TourDay[]
+  crewMembers   TourCrewMember[]
+  expenses      Expense[]
+  budgetItems   BudgetItem[]
+  travelTickets TravelTicket[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([teamId])
+  @@map("tours")
+}
+
+// ============================================================
+// TOUR DAY (Itinerary)
+// ============================================================
+
+enum DayType {
+  SHOW
+  TRAVEL
+  OFF
+  REHEARSAL
+  PRESS
+  LOAD_IN
+  FESTIVAL
+  OTHER
+}
+
+model TourDay {
+  id          String  @id @default(cuid())
+  date        DateTime @db.Date
+  dayType     DayType  @default(SHOW)
+  dayNumber   Int?
+  title       String?
+  notes       String?  @db.Text
+  isConfirmed Boolean  @default(false)
+
+  city    String?
+  state   String?
+  country String?
+
+  travelNotes String? @db.Text
+
+  tourId  String
+  venueId String?
+
+  tour  Tour   @relation(fields: [tourId], references: [id], onDelete: Cascade)
+  venue Venue? @relation(fields: [venueId], references: [id])
+
+  scheduleItems  ScheduleItem[]
+  showDetails    ShowDetails?
+  travelLegs     TravelLeg[]
+  hotelStay      HotelStay?
+  guestListItems GuestListItem[]
+  dayNotes       DayNote[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([tourId, date])
+  @@index([tourId])
+  @@index([date])
+  @@map("tour_days")
+}
+
+// ============================================================
+// SCHEDULE ITEMS (Day Sheet timeline)
+// ============================================================
+
+enum ScheduleItemType {
+  LOAD_IN
+  SOUNDCHECK
+  DOORS
+  SUPPORT_SET
+  SET_TIME
+  CHANGEOVER
+  CURFEW
+  MEET_AND_GREET
+  CATERING
+  PRESS
+  INTERVIEW
+  REHEARSAL
+  TRAVEL_DEPART
+  TRAVEL_ARRIVE
+  HOTEL_CHECK_IN
+  HOTEL_CHECK_OUT
+  CUSTOM
+}
+
+model ScheduleItem {
+  id        String           @id @default(cuid())
+  type      ScheduleItemType @default(CUSTOM)
+  label     String
+  startTime DateTime?        @db.Time
+  endTime   DateTime?        @db.Time
+  duration  Int?
+  notes     String?
+  sortOrder Int              @default(0)
+
+  tourDayId String
+
+  tourDay TourDay @relation(fields: [tourDayId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([tourDayId])
+  @@map("schedule_items")
+}
+
+// ============================================================
+// SHOW DETAILS
+// ============================================================
+
+enum DealType {
+  GUARANTEE
+  PERCENTAGE
+  GUARANTEE_PLUS
+  FLAT_PLUS_BONUS
+  DOOR_DEAL
+  BUYOUT
+  FREE
+}
+
+model ShowDetails {
+  id             String   @id @default(cuid())
+
+  dealType       DealType @default(GUARANTEE)
+  guarantee      Decimal? @db.Decimal(12, 2)
+  percentage     Decimal? @db.Decimal(5, 2)
+  bonusThreshold Int?
+  bonusAmount    Decimal? @db.Decimal(12, 2)
+  walkout        Decimal? @db.Decimal(12, 2)
+
+  ticketPrice    Decimal? @db.Decimal(10, 2)
+  capacity       Int?
+  ticketsSold    Int?
+  ticketsComped  Int?
+  grossRevenue   Decimal? @db.Decimal(12, 2)
+
+  setLength       Int?
+  productionNotes String? @db.Text
+  wifiNetwork     String?
+  wifiPassword    String?
+  parkingNotes    String?
+
+  merchSales      Decimal? @db.Decimal(12, 2)
+  merchCommission Decimal? @db.Decimal(5, 2)
+
+  isSettled       Boolean  @default(false)
+  settlementNotes String?  @db.Text
+  settlementDate  DateTime?
+
+  promoterName  String?
+  promoterEmail String?
+  promoterPhone String?
+
+  tourDayId String @unique
+
+  tourDay    TourDay         @relation(fields: [tourDayId], references: [id], onDelete: Cascade)
+  deductions ShowDeduction[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("show_details")
+}
+
+model ShowDeduction {
+  id           String  @id @default(cuid())
+  label        String
+  amount       Decimal @db.Decimal(12, 2)
+  isPercentage Boolean @default(false)
+  notes        String?
+
+  showDetailsId String
+
+  showDetails ShowDetails @relation(fields: [showDetailsId], references: [id], onDelete: Cascade)
+
+  @@map("show_deductions")
+}
+
+// ============================================================
+// TRAVEL
+// ============================================================
+
+enum TravelMode {
+  BUS
+  FLY
+  DRIVE
+  TRAIN
+  FERRY
+  OTHER
+}
+
+model TravelLeg {
+  id               String     @id @default(cuid())
+  mode             TravelMode @default(DRIVE)
+  departureCity    String?
+  arrivalCity      String?
+  departureTime    DateTime?
+  arrivalTime      DateTime?
+  distance         Decimal?   @db.Decimal(10, 2)
+  carrier          String?
+  flightNumber     String?
+  confirmationCode String?
+  notes            String?    @db.Text
+  sortOrder        Int        @default(0)
+
+  tourDayId String
+
+  tourDay    TourDay            @relation(fields: [tourDayId], references: [id], onDelete: Cascade)
+  passengers TravelAssignment[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([tourDayId])
+  @@map("travel_legs")
+}
+
+model TravelAssignment {
+  id           String @id @default(cuid())
+  travelLegId  String
+  crewMemberId String
+
+  travelLeg  TravelLeg      @relation(fields: [travelLegId], references: [id], onDelete: Cascade)
+  crewMember TourCrewMember @relation(fields: [crewMemberId], references: [id], onDelete: Cascade)
+
+  @@unique([travelLegId, crewMemberId])
+  @@map("travel_assignments")
+}
+
+// ============================================================
+// HOTEL
+// ============================================================
+
+model HotelStay {
+  id               String   @id @default(cuid())
+  hotelName        String
+  address          String?
+  city             String?
+  phone            String?
+  email            String?
+  website          String?
+  checkIn          DateTime?
+  checkOut         DateTime?
+  confirmationCode String?
+  notes            String?  @db.Text
+  nightlyRate      Decimal? @db.Decimal(10, 2)
+
+  tourDayId String @unique
+
+  tourDay         TourDay          @relation(fields: [tourDayId], references: [id], onDelete: Cascade)
+  roomAssignments RoomAssignment[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("hotel_stays")
+}
+
+model RoomAssignment {
+  id           String  @id @default(cuid())
+  roomNumber   String?
+  roomType     String?
+
+  hotelStayId  String
+  crewMemberId String
+
+  hotelStay  HotelStay      @relation(fields: [hotelStayId], references: [id], onDelete: Cascade)
+  crewMember TourCrewMember @relation(fields: [crewMemberId], references: [id], onDelete: Cascade)
+
+  @@unique([hotelStayId, crewMemberId])
+  @@map("room_assignments")
+}
+
+// ============================================================
+// VENUE
+// ============================================================
+
+model Venue {
+  id         String  @id @default(cuid())
+  name       String
+  nickname   String?
+  address    String?
+  city       String
+  state      String?
+  country    String  @default("US")
+  postalCode String?
+  latitude   Decimal? @db.Decimal(10, 7)
+  longitude  Decimal? @db.Decimal(10, 7)
+  timezone   String?
+
+  capacity   Int?
+  venueType  String?
+  website    String?
+  phone      String?
+  email      String?
+
+  stageWidth     Decimal? @db.Decimal(6, 2)
+  stageDepth     Decimal? @db.Decimal(6, 2)
+  stageHeight    Decimal? @db.Decimal(6, 2)
+  loadInNotes    String?  @db.Text
+  parkingNotes   String?  @db.Text
+  powerDetails   String?  @db.Text
+  wifiNetwork    String?
+  wifiPassword   String?
+  cateringNotes  String?  @db.Text
+  dressingRooms  String?  @db.Text
+  hospitalityNotes String? @db.Text
+  notes          String?  @db.Text
+
+  teamId String
+
+  team     Team           @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  tourDays TourDay[]
+  contacts VenueContact[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([teamId])
+  @@index([city, state])
+  @@map("venues")
+}
+
+model VenueContact {
+  id        String @id @default(cuid())
+  role      String
+
+  venueId   String
+  contactId String
+
+  venue   Venue   @relation(fields: [venueId], references: [id], onDelete: Cascade)
+  contact Contact @relation(fields: [contactId], references: [id], onDelete: Cascade)
+
+  @@unique([venueId, contactId, role])
+  @@map("venue_contacts")
+}
+
+// ============================================================
+// CONTACTS
+// ============================================================
+
+enum ContactCategory {
+  PROMOTER
+  AGENT
+  VENUE_STAFF
+  PRODUCTION
+  CATERING
+  SECURITY
+  TRANSPORT
+  ACCOMMODATION
+  MANAGEMENT
+  LABEL
+  PR
+  MERCH
+  OTHER
+}
+
+model Contact {
+  id        String          @id @default(cuid())
+  firstName String
+  lastName  String
+  email     String?
+  phone     String?
+  mobile    String?
+  company   String?
+  jobTitle  String?
+  category  ContactCategory @default(OTHER)
+  notes     String?         @db.Text
+
+  teamId String
+
+  team          Team           @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  venueContacts VenueContact[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([teamId])
+  @@index([category])
+  @@map("contacts")
+}
+
+// ============================================================
+// CREW & PERSONNEL
+// ============================================================
+
+enum CrewRole {
+  TOUR_MANAGER
+  PRODUCTION_MANAGER
+  STAGE_MANAGER
+  FOH_ENGINEER
+  MONITOR_ENGINEER
+  LIGHTING_DESIGNER
+  LIGHTING_TECH
+  BACKLINE_TECH
+  DRUM_TECH
+  GUITAR_TECH
+  BASS_TECH
+  KEYS_TECH
+  RIGGER
+  CARPENTER
+  VIDEO_DIRECTOR
+  VIDEO_TECH
+  MERCH_MANAGER
+  TOUR_ACCOUNTANT
+  SECURITY
+  WARDROBE
+  HAIR_MAKEUP
+  CATERING
+  BUS_DRIVER
+  TRUCK_DRIVER
+  ARTIST
+  MUSICIAN
+  DANCER
+  PHOTOGRAPHER
+  OTHER
+}
+
+model TourCrewMember {
+  id              String   @id @default(cuid())
+  role            CrewRole @default(OTHER)
+  roleTitle       String?
+  department      String?
+
+  dailyRate       Decimal? @db.Decimal(10, 2)
+  perDiem         Decimal? @db.Decimal(10, 2)
+  currency        String   @default("USD")
+
+  passportNumber  String?
+  passportExpiry  DateTime?
+  dateOfBirth     DateTime? @db.Date
+  nationality     String?
+  dietaryNeeds    String?
+  tShirtSize      String?
+  allergies       String?
+
+  emergencyName     String?
+  emergencyPhone    String?
+  emergencyRelation String?
+
+  startDate DateTime? @db.Date
+  endDate   DateTime? @db.Date
+  isActive  Boolean   @default(true)
+  notes     String?   @db.Text
+
+  userId String?
+  tourId String
+
+  user              User?              @relation(fields: [userId], references: [id])
+  tour              Tour               @relation(fields: [tourId], references: [id], onDelete: Cascade)
+  travelAssignments TravelAssignment[]
+  roomAssignments   RoomAssignment[]
+  perDiemPayments   PerDiemPayment[]
+  crewContacts      CrewContact[]
+  travelTickets     TravelTicket[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, tourId])
+  @@index([tourId])
+  @@map("tour_crew_members")
+}
+
+// ============================================================
+// CREW CONTACTS (General contacts per crew member)
+// ============================================================
+
+model CrewContact {
+  id          String  @id @default(cuid())
+  name        String
+  role        String  // e.g. "Equipment Rental", "Tech Support", "Agent"
+  company     String?
+  phone       String?
+  email       String?
+  notes       String? @db.Text
+
+  crewMemberId String
+
+  crewMember TourCrewMember @relation(fields: [crewMemberId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([crewMemberId])
+  @@map("crew_contacts")
+}
+
+// ============================================================
+// FLIGHT TICKETS
+// ============================================================
+
+model TravelTicket {
+  id               String    @id @default(cuid())
+  ticketType       String    @default("FLIGHT") // FLIGHT, TRAIN, BUS, FERRY, SHUTTLE, OTHER
+  carrier          String    // airline, train company, bus company, etc.
+  serviceNumber    String?   // flight number, train number, etc.
+  departureCity    String
+  arrivalCity      String
+  departureTime    DateTime?
+  arrivalTime      DateTime?
+  bookingReference String?
+  ticketNumber     String?
+  seatNumber       String?
+  baggageAllowance String?
+  cost             Decimal?  @db.Decimal(10, 2)
+  currency         String    @default("USD")
+  status           String    @default("CONFIRMED") // CONFIRMED, CANCELLED, CHANGED
+  notes            String?   @db.Text
+
+  crewMemberId String
+  tourId       String
+
+  crewMember TourCrewMember @relation(fields: [crewMemberId], references: [id], onDelete: Cascade)
+  tour       Tour           @relation(fields: [tourId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([crewMemberId])
+  @@index([tourId])
+  @@map("travel_tickets")
+}
+
+// ============================================================
+// FINANCIAL TRACKING
+// ============================================================
+
+enum ExpenseCategory {
+  TRAVEL
+  ACCOMMODATION
+  CATERING
+  EQUIPMENT
+  VEHICLE
+  FUEL
+  TOLLS
+  PARKING
+  COMMUNICATION
+  PER_DIEM
+  PRODUCTION
+  MERCH
+  INSURANCE
+  VISA
+  MISCELLANEOUS
+  OTHER
+}
+
+model Expense {
+  id          String          @id @default(cuid())
+  description String
+  amount      Decimal         @db.Decimal(12, 2)
+  currency    String          @default("USD")
+  category    ExpenseCategory @default(OTHER)
+  date        DateTime        @db.Date
+  vendor      String?
+  receiptUrl  String?
+  notes       String?         @db.Text
+  isReimbursed Boolean        @default(false)
+
+  tourId String
+
+  tour Tour @relation(fields: [tourId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([tourId])
+  @@index([date])
+  @@index([category])
+  @@map("expenses")
+}
+
+model PerDiemPayment {
+  id       String   @id @default(cuid())
+  date     DateTime @db.Date
+  amount   Decimal  @db.Decimal(10, 2)
+  currency String   @default("USD")
+  isPaid   Boolean  @default(false)
+  notes    String?
+
+  crewMemberId String
+
+  crewMember TourCrewMember @relation(fields: [crewMemberId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([crewMemberId, date])
+  @@index([crewMemberId])
+  @@map("per_diem_payments")
+}
+
+model BudgetItem {
+  id          String   @id @default(cuid())
+  category    String
+  description String
+  estimated   Decimal  @db.Decimal(12, 2)
+  actual      Decimal? @db.Decimal(12, 2)
+  notes       String?
+
+  tourId String
+
+  tour Tour @relation(fields: [tourId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([tourId])
+  @@map("budget_items")
+}
+
+// ============================================================
+// GUEST LIST
+// ============================================================
+
+enum GuestListStatus {
+  PENDING
+  APPROVED
+  DENIED
+  CHECKED_IN
+}
+
+model GuestListItem {
+  id          String          @id @default(cuid())
+  guestName   String
+  plusOnes    Int             @default(0)
+  status      GuestListStatus @default(PENDING)
+  requestedBy String?
+  notes       String?
+
+  tourDayId String
+
+  tourDay TourDay @relation(fields: [tourDayId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([tourDayId])
+  @@map("guest_list_items")
+}
+
+// ============================================================
+// DAY NOTES
+// ============================================================
+
+model DayNote {
+  id        String  @id @default(cuid())
+  category  String  @default("general")
+  content   String  @db.Text
+  isPrivate Boolean @default(false)
+
+  tourDayId String
+
+  tourDay TourDay @relation(fields: [tourDayId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([tourDayId])
+  @@map("day_notes")
+}

@@ -1,0 +1,19 @@
+{
+  "name": "TourManager",
+  "short_name": "TourMgr",
+  "description": "Professional tour management for live entertainment",
+  "start_url": "/dashboard",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#18181b",
+  "orientation": "any",
+  "categories": ["business", "productivity"],
+  "icons": [
+    {
+      "src": "/icons/icon-192.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
