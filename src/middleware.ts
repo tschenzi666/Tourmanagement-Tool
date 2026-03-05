@@ -12,8 +12,10 @@ export default auth((req) => {
   const isPublicPage = pathname === "/"
   const isApiAuth = pathname.startsWith("/api/auth")
   const isApiRegister = pathname.startsWith("/api/register")
+  const isApiInvite = pathname.startsWith("/api/invite")
+  const isJoinPage = pathname.startsWith("/join/")
 
-  if (isApiAuth || isApiRegister || isPublicPage) {
+  if (isApiAuth || isApiRegister || isApiInvite || isPublicPage) {
     return NextResponse.next()
   }
 
@@ -25,6 +27,10 @@ export default auth((req) => {
   }
 
   if (!isLoggedIn) {
+    if (isJoinPage) {
+      const token = pathname.split("/join/")[1]
+      return NextResponse.redirect(new URL(`/register?invite=${token}`, req.url))
+    }
     return NextResponse.redirect(new URL("/login", req.url))
   }
 

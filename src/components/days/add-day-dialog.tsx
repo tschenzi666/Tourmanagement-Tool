@@ -39,23 +39,33 @@ const dayTypes = [
 export function AddDayDialog({ tourId }: { tourId: string }) {
   const [open, setOpen] = useState(false)
   const [loading, setLoading] = useState(false)
+  const [error, setError] = useState("")
   const router = useRouter()
 
   async function handleSubmit(formData: FormData) {
     setLoading(true)
+    setError("")
+
+    const date = formData.get("date") as string
+    if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+      setError("Please enter a valid date.")
+      setLoading(false)
+      return
+    }
+
     try {
       await createTourDay(tourId, formData)
       setOpen(false)
       router.refresh()
-    } catch (error) {
-      console.error("Failed to create tour day:", error)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to create tour day")
     } finally {
       setLoading(false)
     }
   }
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog open={open} onOpenChange={(v) => { setOpen(v); if (!v) setError(""); }}>
       <DialogTrigger asChild>
         <Button>
           <Plus className="mr-2 h-4 w-4" />
@@ -71,6 +81,11 @@ export function AddDayDialog({ tourId }: { tourId: string }) {
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-4 py-4">
+            {error && (
+              <div className="rounded-md bg-destructive/10 border border-destructive/30 px-3 py-2 text-sm text-destructive">
+                {error}
+              </div>
+            )}
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="date">Date</Label>

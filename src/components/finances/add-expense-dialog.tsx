@@ -1,6 +1,7 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useTransition } from "react"
+import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
@@ -25,10 +26,35 @@ import { expenseCategories, formatExpenseCategory, getCategoryEmoji } from "@/li
 
 export function AddExpenseDialog({ tourId }: { tourId: string }) {
   const [open, setOpen] = useState(false)
-  const createExpenseWithTourId = createExpense.bind(null, tourId)
+  const [error, setError] = useState("")
+  const [isPending, startTransition] = useTransition()
+  const router = useRouter()
+
+  function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault()
+    setError("")
+
+    const form = new FormData(e.currentTarget)
+    const date = form.get("date") as string
+
+    if (date && !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+      setError("Please enter a valid date.")
+      return
+    }
+
+    startTransition(async () => {
+      try {
+        await createExpense(tourId, form)
+        setOpen(false)
+        router.refresh()
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Failed to add expense")
+      }
+    })
+  }
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog open={open} onOpenChange={(v) => { setOpen(v); if (!v) setError(""); }}>
       <DialogTrigger asChild>
         <Button>
           <Plus className="mr-2 h-4 w-4" />
@@ -39,7 +65,12 @@ export function AddExpenseDialog({ tourId }: { tourId: string }) {
         <DialogHeader>
           <DialogTitle>Add Expense</DialogTitle>
         </DialogHeader>
-        <form action={createExpenseWithTourId} className="space-y-4">
+        <form onSubmit={handleSubmit} className="space-y-4">
+          {error && (
+            <div className="rounded-md bg-destructive/10 border border-destructive/30 px-3 py-2 text-sm text-destructive">
+              {error}
+            </div>
+          )}
           <div className="grid grid-cols-2 gap-4">
             <div className="col-span-2 space-y-2">
               <Label htmlFor="description">Description *</Label>
@@ -92,7 +123,9 @@ export function AddExpenseDialog({ tourId }: { tourId: string }) {
             </div>
           </div>
           <div className="flex justify-end">
-            <Button type="submit">Add Expense</Button>
+            <Button type="submit" disabled={isPending}>
+              {isPending ? "Adding..." : "Add Expense"}
+            </Button>
           </div>
         </form>
       </DialogContent>

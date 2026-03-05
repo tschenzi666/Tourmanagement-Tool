@@ -59,13 +59,13 @@ export function TourForm({ action, tour, submitLabel = "Create Tour" }: TourForm
       return
     }
 
-    if (startDate && isNaN(Date.parse(startDate))) {
-      setError("Start date is invalid. Please use the date picker or enter a valid date.")
+    if (startDate && !/^\d{4}-\d{2}-\d{2}$/.test(startDate)) {
+      setError("Start date is invalid. Please use the format YYYY-MM-DD.")
       return
     }
 
-    if (endDate && isNaN(Date.parse(endDate))) {
-      setError("End date is invalid. Please use the date picker or enter a valid date.")
+    if (endDate && !/^\d{4}-\d{2}-\d{2}$/.test(endDate)) {
+      setError("End date is invalid. Please use the format YYYY-MM-DD.")
       return
     }
 
