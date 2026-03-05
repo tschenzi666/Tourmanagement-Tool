@@ -75,7 +75,7 @@ export async function POST(req: Request) {
     await writeFile(path.join(uploadDir, filename), buffer)
 
     // 9. Update team logoUrl in database
-    const logoUrl = `/uploads/logos/${filename}`
+    const logoUrl = `/api/uploads/logos/${filename}`
     await prisma.team.update({
       where: { id: membership.teamId },
       data: { logoUrl },

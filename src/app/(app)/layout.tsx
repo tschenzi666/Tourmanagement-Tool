@@ -8,6 +8,7 @@ import { Toaster } from "@/components/ui/sonner"
 import { CommandPalette } from "@/components/layout/command-palette"
 import { BrandingProvider } from "@/components/providers/branding-provider"
 import type { TeamBranding } from "@/lib/types/team-branding"
+import { normalizeLogoUrl } from "@/lib/utils/logo-url"
 
 export default async function AppLayout({
   children,
@@ -27,11 +28,15 @@ export default async function AppLayout({
 
   // Build branding from the user's active team
   const activeTeam = teams[0]
+
+  // Normalize old logo URLs to use the API serving route
+  const logoUrl = normalizeLogoUrl(activeTeam?.logoUrl ?? null)
+
   const branding: TeamBranding | null = activeTeam
     ? {
         teamId: activeTeam.id,
         teamName: activeTeam.name,
-        logoUrl: activeTeam.logoUrl,
+        logoUrl,
         brandColor: activeTeam.brandColor,
         brandFont: activeTeam.brandFont,
         showLogoInSidebar: activeTeam.showLogoInSidebar,

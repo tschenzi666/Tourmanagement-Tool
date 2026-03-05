@@ -3,6 +3,7 @@ import { getTourDays } from "@/lib/queries/tour-day-queries"
 import { prisma } from "@/lib/prisma"
 import { format } from "date-fns"
 import { PrintButton } from "@/components/print/print-button"
+import { normalizeLogoUrl } from "@/lib/utils/logo-url"
 
 export default async function PrintSchedulePage({
   params,
@@ -38,7 +39,7 @@ export default async function PrintSchedulePage({
           <div className="mb-2">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
-              src={tour.team.logoUrl}
+              src={normalizeLogoUrl(tour.team.logoUrl)!}
               alt={tour.team.name}
               className="h-12 w-auto object-contain"
             />
