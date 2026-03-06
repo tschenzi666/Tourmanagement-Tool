@@ -36,6 +36,11 @@ const dayTypes = [
   { value: "OTHER", label: "Other" },
 ]
 
+function getTodayString() {
+  const d = new Date()
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`
+}
+
 export function AddDayDialog({ tourId }: { tourId: string }) {
   const [open, setOpen] = useState(false)
   const [loading, setLoading] = useState(false)
@@ -89,7 +94,7 @@ export function AddDayDialog({ tourId }: { tourId: string }) {
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="date">Date</Label>
-                <Input id="date" name="date" type="date" required />
+                <Input id="date" name="date" type="date" required defaultValue={getTodayString()} />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="dayType">Day Type</Label>
