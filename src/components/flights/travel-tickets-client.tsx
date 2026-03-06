@@ -36,11 +36,15 @@ import {
   Users,
   CreditCard,
   Calendar,
+  RefreshCw,
+  Radar,
+  AlertTriangle,
 } from "lucide-react"
-import { format } from "date-fns"
+import { format, formatDistanceToNow } from "date-fns"
 import { de } from "date-fns/locale"
 import { toast } from "sonner"
 import { createTravelTicket, updateTravelTicket, deleteTravelTicket } from "@/lib/actions/crew-actions"
+import { checkFlightStatus, checkAllFlightStatuses } from "@/lib/actions/flight-tracking-actions"
 
 // ─── Types ──────────────────────────────────────────────────
 
@@ -75,6 +79,15 @@ interface TravelTicketData {
     role: string
     user: { name: string | null } | null
   }
+  // Live tracking fields
+  liveStatus: string | null
+  liveDelay: number | null
+  liveDepartureGate: string | null
+  liveDepartureTerminal: string | null
+  liveArrivalGate: string | null
+  liveArrivalTerminal: string | null
+  liveArrivalBaggage: string | null
+  liveLastChecked: Date | null
 }
 
 interface TravelTicketsClientProps {
@@ -82,6 +95,7 @@ interface TravelTicketsClientProps {
   tickets: TravelTicketData[]
   crewMembers: CrewMember[]
   currency: string
+  hasApiKey: boolean
 }
 
 // ─── Constants ──────────────────────────────────────────────
@@ -125,6 +139,26 @@ const statusLabels: Record<string, string> = {
   CHANGED: "Geändert",
 }
 
+const liveStatusLabels: Record<string, string> = {
+  scheduled: "Geplant",
+  active: "In der Luft",
+  landed: "Gelandet",
+  cancelled: "Storniert",
+  incident: "Zwischenfall",
+  diverted: "Umgeleitet",
+  not_found: "Nicht gefunden",
+}
+
+const liveStatusColors: Record<string, string> = {
+  scheduled: "bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300",
+  active: "bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300",
+  landed: "bg-green-100 text-green-700 dark:bg-green-950 dark:text-green-300",
+  cancelled: "bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-300",
+  incident: "bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-300",
+  diverted: "bg-orange-100 text-orange-700 dark:bg-orange-950 dark:text-orange-300",
+  not_found: "bg-gray-100 text-gray-500 dark:bg-gray-950 dark:text-gray-400",
+}
+
 const ticketTypes = [
   { value: "FLIGHT", label: "✈️ Flug" },
   { value: "TRAIN", label: "🚆 Zug" },
@@ -156,18 +190,18 @@ function toLocalDatetime(date: Date | null): string {
 
 // ─── Main Component ─────────────────────────────────────────
 
-export function TravelTicketsClient({ tourId, tickets, crewMembers, currency }: TravelTicketsClientProps) {
+export function TravelTicketsClient({ tourId, tickets, crewMembers, currency, hasApiKey }: TravelTicketsClientProps) {
   const router = useRouter()
-  
   const [addOpen, setAddOpen] = useState(false)
   const [editTicket, setEditTicket] = useState<TravelTicketData | null>(null)
+  const [isCheckingAll, startCheckAll] = useTransition()
 
   const totalCost = tickets.reduce((sum, t) => sum + (t.cost ? Number(t.cost) : 0), 0)
+  const flightCount = tickets.filter(t => t.ticketType === "FLIGHT" && t.serviceNumber).length
 
   // Group by date
   const byDate = new Map<string, TravelTicketData[]>()
   const noDate: TravelTicketData[] = []
-
   for (const ticket of tickets) {
     if (ticket.departureTime) {
       const key = formatDateShort(ticket.departureTime)
@@ -178,30 +212,47 @@ export function TravelTicketsClient({ tourId, tickets, crewMembers, currency }: 
     }
   }
 
-  // Sort date groups chronologically
   const sortedDates = Array.from(byDate.entries()).sort((a, b) => {
     const dateA = a[1][0]?.departureTime ? new Date(a[1][0].departureTime).getTime() : 0
     const dateB = b[1][0]?.departureTime ? new Date(b[1][0].departureTime).getTime() : 0
     return dateA - dateB
   })
 
-  // Stats
   const byType = new Map<string, number>()
   for (const t of tickets) {
     byType.set(t.ticketType, (byType.get(t.ticketType) || 0) + 1)
   }
 
+  function handleCheckAll() {
+    startCheckAll(async () => {
+      try {
+        const result = await checkAllFlightStatuses(tourId)
+        toast.success(`${result.checked} Flüge aktualisiert${result.skipped ? `, ${result.skipped} übersprungen (kürzlich geprüft)` : ""}`)
+        router.refresh()
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : "Fehler beim Aktualisieren")
+      }
+    })
+  }
+
   return (
     <div className="space-y-6">
-      {/* Add button */}
+      {/* Action buttons */}
       {tickets.length > 0 && (
-        <div className="flex justify-end">
+        <div className="flex justify-end gap-2">
+          {hasApiKey && flightCount > 0 && (
+            <Button variant="outline" onClick={handleCheckAll} disabled={isCheckingAll}>
+              <Radar className={`mr-2 h-4 w-4 ${isCheckingAll ? "animate-spin" : ""}`} />
+              {isCheckingAll ? "Prüfe Flüge..." : `Alle Flüge prüfen (${flightCount})`}
+            </Button>
+          )}
           <Button onClick={() => setAddOpen(true)}>
             <Plus className="mr-2 h-4 w-4" />
             Neues Ticket
           </Button>
         </div>
       )}
+
       {/* Stats Cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <Card>
@@ -258,7 +309,7 @@ export function TravelTicketsClient({ tourId, tickets, crewMembers, currency }: 
         </Card>
       </div>
 
-      {/* Type filter badges */}
+      {/* Type badges */}
       {tickets.length > 0 && (
         <div className="flex flex-wrap gap-2">
           {Array.from(byType.entries()).map(([type, count]) => {
@@ -311,8 +362,10 @@ export function TravelTicketsClient({ tourId, tickets, crewMembers, currency }: 
                 ticket={ticket}
                 tourId={tourId}
                 currency={currency}
+                hasApiKey={hasApiKey}
                 onEdit={() => setEditTicket(ticket)}
                 onDeleted={() => router.refresh()}
+                onStatusChecked={() => router.refresh()}
               />
             ))}
           </div>
@@ -323,13 +376,9 @@ export function TravelTicketsClient({ tourId, tickets, crewMembers, currency }: 
       {noDate.length > 0 && (
         <div>
           <div className="flex items-center gap-3 mb-3">
-            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-muted text-muted-foreground text-xs font-bold">
-              ?
-            </div>
+            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-muted text-muted-foreground text-xs font-bold">?</div>
             <h2 className="text-lg font-semibold text-muted-foreground">Ohne Datum</h2>
-            <Badge variant="outline" className="text-xs">
-              {noDate.length} Ticket{noDate.length !== 1 ? "s" : ""}
-            </Badge>
+            <Badge variant="outline" className="text-xs">{noDate.length} Ticket{noDate.length !== 1 ? "s" : ""}</Badge>
           </div>
           <div className="space-y-2 ml-4 border-l-2 border-dashed border-muted pl-6">
             {noDate.map((ticket) => (
@@ -338,34 +387,67 @@ export function TravelTicketsClient({ tourId, tickets, crewMembers, currency }: 
                 ticket={ticket}
                 tourId={tourId}
                 currency={currency}
+                hasApiKey={hasApiKey}
                 onEdit={() => setEditTicket(ticket)}
                 onDeleted={() => router.refresh()}
+                onStatusChecked={() => router.refresh()}
               />
             ))}
           </div>
         </div>
       )}
 
-      {/* Add button (floating) */}
-      <AddTicketDialog
-        open={addOpen}
-        onOpenChange={setAddOpen}
-        tourId={tourId}
-        crewMembers={crewMembers}
-        currency={currency}
-        onSuccess={() => router.refresh()}
-      />
-
-      {/* Edit dialog */}
+      <AddTicketDialog open={addOpen} onOpenChange={setAddOpen} tourId={tourId} crewMembers={crewMembers} currency={currency} onSuccess={() => router.refresh()} />
       {editTicket && (
-        <EditTicketDialog
-          ticket={editTicket}
-          tourId={tourId}
-          crewMembers={crewMembers}
-          currency={currency}
-          onClose={() => setEditTicket(null)}
-          onSuccess={() => { setEditTicket(null); router.refresh() }}
-        />
+        <EditTicketDialog ticket={editTicket} tourId={tourId} crewMembers={crewMembers} currency={currency} onClose={() => setEditTicket(null)} onSuccess={() => { setEditTicket(null); router.refresh() }} />
+      )}
+    </div>
+  )
+}
+
+// ─── Live Status Badge ──────────────────────────────────────
+
+function LiveStatusSection({ ticket }: { ticket: TravelTicketData }) {
+  if (!ticket.liveStatus) return null
+
+  const label = liveStatusLabels[ticket.liveStatus] ?? ticket.liveStatus
+  const color = liveStatusColors[ticket.liveStatus] ?? liveStatusColors.not_found
+
+  return (
+    <div className="mt-2 p-2 rounded-lg bg-muted/50 border border-dashed">
+      <div className="flex items-center gap-2 flex-wrap">
+        <Radar className="h-3.5 w-3.5 text-muted-foreground" />
+        <Badge className={`text-xs border-0 ${color}`}>
+          {label}
+        </Badge>
+        {ticket.liveDelay != null && ticket.liveDelay > 0 && (
+          <Badge className="text-xs border-0 bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-300">
+            <AlertTriangle className="h-3 w-3 mr-1" />
+            +{ticket.liveDelay} Min. Verspätung
+          </Badge>
+        )}
+      </div>
+      <div className="flex items-center gap-4 mt-1.5 text-xs text-muted-foreground flex-wrap">
+        {ticket.liveDepartureTerminal && (
+          <span>Terminal: <span className="font-mono font-medium">{ticket.liveDepartureTerminal}</span></span>
+        )}
+        {ticket.liveDepartureGate && (
+          <span>Gate: <span className="font-mono font-medium">{ticket.liveDepartureGate}</span></span>
+        )}
+        {ticket.liveArrivalTerminal && (
+          <span>Ank. Terminal: <span className="font-mono font-medium">{ticket.liveArrivalTerminal}</span></span>
+        )}
+        {ticket.liveArrivalGate && (
+          <span>Ank. Gate: <span className="font-mono font-medium">{ticket.liveArrivalGate}</span></span>
+        )}
+        {ticket.liveArrivalBaggage && (
+          <span>Gepäckband: <span className="font-mono font-medium">{ticket.liveArrivalBaggage}</span></span>
+        )}
+      </div>
+      {ticket.liveLastChecked && (
+        <p className="text-[10px] text-muted-foreground mt-1">
+          Zuletzt geprüft: {formatDistanceToNow(new Date(ticket.liveLastChecked), { addSuffix: true, locale: de })}
+        </p>
       )}
     </div>
   )
@@ -377,67 +459,78 @@ function TicketCard({
   ticket,
   tourId,
   currency,
+  hasApiKey,
   onEdit,
   onDeleted,
+  onStatusChecked,
 }: {
   ticket: TravelTicketData
   tourId: string
   currency: string
+  hasApiKey: boolean
   onEdit: () => void
   onDeleted: () => void
+  onStatusChecked: () => void
 }) {
   const [isPending, startTransition] = useTransition()
+  const [isChecking, startChecking] = useTransition()
   const Icon = ticketTypeIcons[ticket.ticketType] ?? Ticket
   const isCancelled = ticket.status === "CANCELLED"
+  const canCheck = hasApiKey && ticket.ticketType === "FLIGHT" && !!ticket.serviceNumber
+
+  function handleCheckStatus() {
+    startChecking(async () => {
+      try {
+        const result = await checkFlightStatus(tourId, ticket.id)
+        if (result.status === "not_found") {
+          toast.info("Kein Flug mit dieser Nummer gefunden")
+        } else {
+          toast.success(`Status: ${liveStatusLabels[result.status ?? ""] ?? result.status}${result.delay ? ` (+${result.delay} Min.)` : ""}`)
+        }
+        onStatusChecked()
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : "Fehler beim Statusabruf")
+      }
+    })
+  }
 
   return (
     <Card className={`transition-all hover:shadow-md ${isCancelled ? "opacity-60" : ""}`}>
       <CardContent className="p-4">
         <div className="flex items-start gap-4">
-          {/* Icon */}
           <div className={`flex h-12 w-12 items-center justify-center rounded-xl shrink-0 ${ticketTypeColors[ticket.ticketType] ?? ticketTypeColors.OTHER}`}>
             <Icon className="h-6 w-6" />
           </div>
 
-          {/* Main info */}
           <div className="flex-1 min-w-0">
-            {/* Route */}
             <div className="flex items-center gap-2 flex-wrap">
               <span className="font-semibold text-lg">{ticket.departureCity}</span>
               <ArrowRight className="h-4 w-4 text-muted-foreground shrink-0" />
               <span className="font-semibold text-lg">{ticket.arrivalCity}</span>
             </div>
 
-            {/* Carrier & number */}
             <div className="flex items-center gap-2 mt-1 flex-wrap">
               <span className="text-sm font-medium">{ticket.carrier}</span>
               {ticket.serviceNumber && (
-                <Badge variant="outline" className="text-xs font-mono">
-                  {ticket.serviceNumber}
-                </Badge>
+                <Badge variant="outline" className="text-xs font-mono">{ticket.serviceNumber}</Badge>
               )}
               <Badge className={`text-xs border-0 ${statusColors[ticket.status] ?? ""}`}>
                 {statusLabels[ticket.status] ?? ticket.status}
               </Badge>
             </div>
 
-            {/* Time */}
             {ticket.departureTime && (
               <div className="flex items-center gap-2 mt-2 text-sm text-muted-foreground">
                 <Clock className="h-3.5 w-3.5 shrink-0" />
                 <span className="font-mono">
                   {formatTime(ticket.departureTime)}
                   {ticket.arrivalTime && (
-                    <>
-                      <span className="mx-1">→</span>
-                      {formatTime(ticket.arrivalTime)}
-                    </>
+                    <><span className="mx-1">→</span>{formatTime(ticket.arrivalTime)}</>
                   )}
                 </span>
               </div>
             )}
 
-            {/* Details row */}
             <div className="flex items-center gap-3 mt-2 text-xs text-muted-foreground flex-wrap">
               <span className="flex items-center gap-1">
                 <Users className="h-3 w-3" />
@@ -454,13 +547,14 @@ function TicketCard({
               )}
             </div>
 
-            {/* Notes */}
             {ticket.notes && (
               <p className="text-xs text-muted-foreground mt-2 italic">{ticket.notes}</p>
             )}
+
+            {/* Live tracking info */}
+            <LiveStatusSection ticket={ticket} />
           </div>
 
-          {/* Right side: cost & actions */}
           <div className="text-right shrink-0 flex flex-col items-end gap-2">
             {ticket.cost && Number(ticket.cost) > 0 && (
               <p className="font-bold text-lg tabular-nums">
@@ -468,6 +562,11 @@ function TicketCard({
               </p>
             )}
             <div className="flex gap-1">
+              {canCheck && (
+                <Button variant="ghost" size="icon" className="h-7 w-7" onClick={handleCheckStatus} disabled={isChecking} title="Flugstatus prüfen">
+                  <RefreshCw className={`h-3 w-3 text-muted-foreground ${isChecking ? "animate-spin" : ""}`} />
+                </Button>
+              )}
               <Button variant="ghost" size="icon" className="h-7 w-7" onClick={onEdit}>
                 <Pencil className="h-3 w-3 text-muted-foreground" />
               </Button>
@@ -501,29 +600,17 @@ function TicketCard({
 // ─── Add Ticket Dialog ──────────────────────────────────────
 
 function AddTicketDialog({
-  open,
-  onOpenChange,
-  tourId,
-  crewMembers,
-  currency,
-  onSuccess,
+  open, onOpenChange, tourId, crewMembers, currency, onSuccess,
 }: {
-  open: boolean
-  onOpenChange: (open: boolean) => void
-  tourId: string
-  crewMembers: CrewMember[]
-  currency: string
-  onSuccess: () => void
+  open: boolean; onOpenChange: (open: boolean) => void; tourId: string; crewMembers: CrewMember[]; currency: string; onSuccess: () => void
 }) {
   const [isPending, startTransition] = useTransition()
   const [ticketType, setTicketType] = useState("FLIGHT")
-
   const labels = getTypeLabels(ticketType)
 
   function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
     const form = new FormData(e.currentTarget)
-
     startTransition(async () => {
       try {
         await createTravelTicket(tourId, {
@@ -543,9 +630,7 @@ function AddTicketDialog({
         toast.success("Ticket angelegt!")
         onOpenChange(false)
         onSuccess()
-      } catch {
-        toast.error("Fehler beim Anlegen")
-      }
+      } catch { toast.error("Fehler beim Anlegen") }
     })
   }
 
@@ -557,16 +642,9 @@ function AddTicketDialog({
           <DialogDescription>Flug, Zug, Bus oder andere Buchung für ein Crew-Mitglied.</DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4">
-          <TicketFormFields
-            crewMembers={crewMembers}
-            ticketType={ticketType}
-            onTicketTypeChange={setTicketType}
-            labels={labels}
-          />
+          <TicketFormFields crewMembers={crewMembers} ticketType={ticketType} onTicketTypeChange={setTicketType} labels={labels} />
           <DialogFooter>
-            <Button type="submit" disabled={isPending}>
-              {isPending ? "Wird angelegt..." : "Ticket anlegen"}
-            </Button>
+            <Button type="submit" disabled={isPending}>{isPending ? "Wird angelegt..." : "Ticket anlegen"}</Button>
           </DialogFooter>
         </form>
       </DialogContent>
@@ -577,30 +655,18 @@ function AddTicketDialog({
 // ─── Edit Ticket Dialog ─────────────────────────────────────
 
 function EditTicketDialog({
-  ticket,
-  tourId,
-  crewMembers,
-  currency,
-  onClose,
-  onSuccess,
+  ticket, tourId, crewMembers, currency, onClose, onSuccess,
 }: {
-  ticket: TravelTicketData
-  tourId: string
-  crewMembers: CrewMember[]
-  currency: string
-  onClose: () => void
-  onSuccess: () => void
+  ticket: TravelTicketData; tourId: string; crewMembers: CrewMember[]; currency: string; onClose: () => void; onSuccess: () => void
 }) {
   const [isPending, startTransition] = useTransition()
   const [ticketType, setTicketType] = useState(ticket.ticketType)
   const [status, setStatus] = useState(ticket.status)
-
   const labels = getTypeLabels(ticketType)
 
   function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
     const form = new FormData(e.currentTarget)
-
     startTransition(async () => {
       try {
         await updateTravelTicket(tourId, ticket.id, {
@@ -620,9 +686,7 @@ function EditTicketDialog({
         })
         toast.success("Ticket aktualisiert!")
         onSuccess()
-      } catch {
-        toast.error("Fehler beim Aktualisieren")
-      }
+      } catch { toast.error("Fehler beim Aktualisieren") }
     })
   }
 
@@ -634,30 +698,17 @@ function EditTicketDialog({
           <DialogDescription>{ticket.carrier} {ticket.serviceNumber} · {ticket.departureCity} → {ticket.arrivalCity}</DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4">
-          <TicketFormFields
-            crewMembers={crewMembers}
-            ticketType={ticketType}
-            onTicketTypeChange={setTicketType}
-            labels={labels}
-            defaults={{
-              crewMemberId: ticket.crewMemberId,
-              carrier: ticket.carrier,
-              serviceNumber: ticket.serviceNumber ?? "",
-              departureCity: ticket.departureCity,
-              arrivalCity: ticket.arrivalCity,
-              departureTime: toLocalDatetime(ticket.departureTime),
-              arrivalTime: toLocalDatetime(ticket.arrivalTime),
-              bookingReference: ticket.bookingReference ?? "",
-              seatNumber: ticket.seatNumber ?? "",
-              cost: ticket.cost ? String(Number(ticket.cost)) : "",
-            }}
-          />
+          <TicketFormFields crewMembers={crewMembers} ticketType={ticketType} onTicketTypeChange={setTicketType} labels={labels} defaults={{
+            crewMemberId: ticket.crewMemberId, carrier: ticket.carrier, serviceNumber: ticket.serviceNumber ?? "",
+            departureCity: ticket.departureCity, arrivalCity: ticket.arrivalCity,
+            departureTime: toLocalDatetime(ticket.departureTime), arrivalTime: toLocalDatetime(ticket.arrivalTime),
+            bookingReference: ticket.bookingReference ?? "", seatNumber: ticket.seatNumber ?? "",
+            cost: ticket.cost ? String(Number(ticket.cost)) : "",
+          }} />
           <div className="space-y-2">
             <Label>Status</Label>
             <Select value={status} onValueChange={setStatus}>
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
+              <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="CONFIRMED">Bestätigt</SelectItem>
                 <SelectItem value="CHANGED">Geändert</SelectItem>
@@ -667,9 +718,7 @@ function EditTicketDialog({
           </div>
           <DialogFooter>
             <Button type="button" variant="outline" onClick={onClose}>Abbrechen</Button>
-            <Button type="submit" disabled={isPending}>
-              {isPending ? "Wird gespeichert..." : "Speichern"}
-            </Button>
+            <Button type="submit" disabled={isPending}>{isPending ? "Wird gespeichert..." : "Speichern"}</Button>
           </DialogFooter>
         </form>
       </DialogContent>
@@ -679,18 +728,9 @@ function EditTicketDialog({
 
 // ─── Shared Form Fields ─────────────────────────────────────
 
-function TicketFormFields({
-  crewMembers,
-  ticketType,
-  onTicketTypeChange,
-  labels,
-  defaults,
-}: {
-  crewMembers: CrewMember[]
-  ticketType: string
-  onTicketTypeChange: (v: string) => void
-  labels: ReturnType<typeof getTypeLabels>
-  defaults?: Record<string, string>
+function TicketFormFields({ crewMembers, ticketType, onTicketTypeChange, labels, defaults }: {
+  crewMembers: CrewMember[]; ticketType: string; onTicketTypeChange: (v: string) => void
+  labels: ReturnType<typeof getTypeLabels>; defaults?: Record<string, string>
 }) {
   return (
     <>
@@ -698,31 +738,15 @@ function TicketFormFields({
         <div className="space-y-2">
           <Label htmlFor="crewMemberId">Crew-Mitglied *</Label>
           <Select name="crewMemberId" defaultValue={defaults?.crewMemberId} required>
-            <SelectTrigger>
-              <SelectValue placeholder="Auswählen..." />
-            </SelectTrigger>
-            <SelectContent>
-              {crewMembers.map((cm) => (
-                <SelectItem key={cm.id} value={cm.id}>
-                  {getCrewName(cm)}
-                </SelectItem>
-              ))}
-            </SelectContent>
+            <SelectTrigger><SelectValue placeholder="Auswählen..." /></SelectTrigger>
+            <SelectContent>{crewMembers.map((cm) => (<SelectItem key={cm.id} value={cm.id}>{getCrewName(cm)}</SelectItem>))}</SelectContent>
           </Select>
         </div>
         <div className="space-y-2">
           <Label>Ticket-Typ *</Label>
           <Select value={ticketType} onValueChange={onTicketTypeChange}>
-            <SelectTrigger>
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {ticketTypes.map((t) => (
-                <SelectItem key={t.value} value={t.value}>
-                  {t.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
+            <SelectTrigger><SelectValue /></SelectTrigger>
+            <SelectContent>{ticketTypes.map((t) => (<SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>))}</SelectContent>
           </Select>
         </div>
       </div>

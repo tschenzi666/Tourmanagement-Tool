@@ -34,6 +34,8 @@ export default async function TravelTicketsPage({
     }),
   ])
 
+  const hasApiKey = !!process.env.AVIATIONSTACK_API_KEY
+
   return (
     <>
       <Header
@@ -61,6 +63,7 @@ export default async function TravelTicketsPage({
           tickets={JSON.parse(JSON.stringify(tickets))}
           crewMembers={crewMembers}
           currency={tour.currency}
+          hasApiKey={hasApiKey}
         />
       </div>
     </>
