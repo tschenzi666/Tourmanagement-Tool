@@ -26,6 +26,9 @@ model User {
   teamMemberships TeamMember[]
   tourAssignments TourCrewMember[]
   createdTours    Tour[]           @relation("TourCreatedBy")
+  votingSessions  VotingSession[]  @relation("VotingSessionCreatedBy")
+  suggestions     VenueSuggestion[]
+  votes           Vote[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -173,11 +176,12 @@ model Tour {
   team      Team @relation(fields: [teamId], references: [id], onDelete: Cascade)
   createdBy User @relation("TourCreatedBy", fields: [createdById], references: [id])
 
-  tourDays      TourDay[]
-  crewMembers   TourCrewMember[]
-  expenses      Expense[]
-  budgetItems   BudgetItem[]
-  travelTickets TravelTicket[]
+  tourDays       TourDay[]
+  crewMembers    TourCrewMember[]
+  expenses       Expense[]
+  budgetItems    BudgetItem[]
+  travelTickets  TravelTicket[]
+  votingSessions VotingSession[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -837,4 +841,82 @@ model DayNote {
 
   @@index([tourDayId])
   @@map("day_notes")
+}
+
+// ============================================================
+// VENUE VOTING
+// ============================================================
+
+enum VotingStatus {
+  OPEN
+  CLOSED
+}
+
+model VotingSession {
+  id          String       @id @default(cuid())
+  title       String
+  description String?
+  status      VotingStatus @default(OPEN)
+  city        String?
+  date        DateTime?    @db.Date
+  closesAt    DateTime?
+
+  tourId      String
+  createdById String
+
+  tour      Tour   @relation(fields: [tourId], references: [id], onDelete: Cascade)
+  createdBy User   @relation("VotingSessionCreatedBy", fields: [createdById], references: [id])
+
+  suggestions VenueSuggestion[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([tourId])
+  @@map("voting_sessions")
+}
+
+model VenueSuggestion {
+  id          String  @id @default(cuid())
+  name        String
+  address     String?
+  city        String?
+  country     String?
+  category    String?
+  latitude    Decimal? @db.Decimal(10, 7)
+  longitude   Decimal? @db.Decimal(10, 7)
+  website     String?
+  phone       String?
+  osmId       String?
+  note        String?
+
+  sessionId   String
+  suggestedById String
+
+  session     VotingSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  suggestedBy User          @relation(fields: [suggestedById], references: [id])
+
+  votes Vote[]
+
+  createdAt DateTime @default(now())
+
+  @@index([sessionId])
+  @@map("venue_suggestions")
+}
+
+model Vote {
+  id           String @id @default(cuid())
+  value        Int    @default(1)
+
+  suggestionId String
+  userId       String
+
+  suggestion VenueSuggestion @relation(fields: [suggestionId], references: [id], onDelete: Cascade)
+  user       User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@unique([suggestionId, userId])
+  @@index([suggestionId])
+  @@map("votes")
 }

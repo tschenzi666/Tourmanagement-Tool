@@ -1,8 +1,7 @@
 "use client"
 
-import { useState, useCallback } from "react"
+import { useState, useCallback, useEffect, useRef } from "react"
 import { Input } from "@/components/ui/input"
-import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Search, MapPin, Loader2 } from "lucide-react"
 
@@ -53,15 +52,17 @@ export function VenueSearch({ onSelect }: { onSelect: (result: VenueSearchResult
   const [results, setResults] = useState<NominatimResult[]>([])
   const [isSearching, setIsSearching] = useState(false)
   const [hasSearched, setHasSearched] = useState(false)
+  const debounceRef = useRef<NodeJS.Timeout | null>(null)
 
-  const search = useCallback(async () => {
-    if (!query.trim()) return
+  const search = useCallback(async (searchQuery?: string) => {
+    const q = searchQuery ?? query
+    if (!q.trim()) return
     setIsSearching(true)
     setHasSearched(true)
 
     try {
       const params = new URLSearchParams({
-        q: query,
+        q,
         format: "json",
         addressdetails: "1",
         extratags: "1",
@@ -82,6 +83,22 @@ export function VenueSearch({ onSelect }: { onSelect: (result: VenueSearchResult
       setResults([])
     } finally {
       setIsSearching(false)
+    }
+  }, [query])
+
+  // Auto-search with debounce as user types
+  useEffect(() => {
+    if (debounceRef.current) clearTimeout(debounceRef.current)
+    if (!query.trim() || query.trim().length < 3) {
+      setResults([])
+      setHasSearched(false)
+      return
+    }
+    debounceRef.current = setTimeout(() => {
+      search(query)
+    }, 400)
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current)
     }
   }, [query])
 
@@ -119,20 +136,19 @@ export function VenueSearch({ onSelect }: { onSelect: (result: VenueSearchResult
 
   return (
     <div className="space-y-3">
-      <div className="flex gap-2">
-        <div className="relative flex-1">
+      <div className="relative">
+        {isSearching ? (
+          <Loader2 className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground animate-spin" />
+        ) : (
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), search())}
-            placeholder="Search for a venue... (e.g. Olympia Paris, O2 Arena London)"
-            className="pl-9"
-          />
-        </div>
-        <Button type="button" variant="secondary" onClick={search} disabled={isSearching || !query.trim()}>
-          {isSearching ? <Loader2 className="h-4 w-4 animate-spin" /> : "Search"}
-        </Button>
+        )}
+        <Input
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          onKeyDown={(e) => e.key === "Enter" && e.preventDefault()}
+          placeholder="Start typing to search... (e.g. Olympia Paris, O2 Arena London)"
+          className="pl-9"
+        />
       </div>
 
       {results.length > 0 && (
