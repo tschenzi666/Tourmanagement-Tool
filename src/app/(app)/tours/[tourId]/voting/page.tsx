@@ -73,7 +73,7 @@ export default async function VotingSessionsPage({ params }: Props) {
           </Card>
         ) : (
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {sessions.map((s) => (
+            {sessions.map((s: typeof sessions[number]) => (
               <Link key={s.id} href={`/tours/${tourId}/voting/${s.id}`}>
                 <Card className="transition-colors hover:border-primary/50 h-full">
                   <CardContent className="pt-6 space-y-3">

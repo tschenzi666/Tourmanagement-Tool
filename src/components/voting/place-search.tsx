@@ -32,7 +32,7 @@ export function PlaceSearch({ sessionId, tourId, defaultCity }: Props) {
   const [selected, setSelected] = useState<PlaceResult | null>(null)
   const [isSearching, setIsSearching] = useState(false)
   const [showManual, setShowManual] = useState(false)
-  const debounceRef = useRef<NodeJS.Timeout>()
+  const debounceRef = useRef<NodeJS.Timeout>(undefined)
 
   useEffect(() => {
     if (query.length < 3) {
