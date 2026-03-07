@@ -6,6 +6,7 @@ import Credentials from "next-auth/providers/credentials"
 // The actual credential verification happens in auth.ts via the authorize callback override.
 
 export default {
+  trustHost: true,
   providers: [
     Credentials({
       name: "credentials",

@@ -36,7 +36,6 @@ import {
   Ticket,
   Route,
   Plane,
-  Vote,
 } from "lucide-react"
 import { signOut } from "next-auth/react"
 import { TourSwitcher } from "@/components/layout/tour-switcher"
@@ -86,7 +85,6 @@ export function AppSidebar({ user, teams, tours, currentTourId: initialTourId }:
         { title: "Finances", href: `/tours/${currentTourId}/finances`, icon: DollarSign },
         { title: "Guest Lists", href: `/tours/${currentTourId}/guests`, icon: Ticket },
         { title: "Travel", href: `/tours/${currentTourId}/flights`, icon: Plane },
-        { title: "Voting", href: `/tours/${currentTourId}/voting`, icon: Vote },
       ]
     : []
 

@@ -320,8 +320,57 @@ export async function createTravelTicket(
     },
   })
 
-  revalidatePath(`/tours/${tourId}/travel-tickets`)
+  revalidatePath(`/tours/${tourId}/flights`)
   revalidatePath(`/tours/${tourId}/crew/${data.crewMemberId}`)
+}
+
+export async function updateTravelTicket(
+  tourId: string,
+  ticketId: string,
+  data: {
+    crewMemberId?: string
+    ticketType?: string
+    carrier?: string
+    serviceNumber?: string
+    departureCity?: string
+    arrivalCity?: string
+    departureTime?: string
+    arrivalTime?: string
+    bookingReference?: string
+    ticketNumber?: string
+    seatNumber?: string
+    baggageAllowance?: string
+    cost?: number | null
+    currency?: string
+    status?: string
+    notes?: string
+  }
+) {
+  await requireAuth()
+
+  await prisma.travelTicket.update({
+    where: { id: ticketId },
+    data: {
+      ...(data.ticketType !== undefined && { ticketType: data.ticketType }),
+      ...(data.carrier !== undefined && { carrier: data.carrier }),
+      ...(data.serviceNumber !== undefined && { serviceNumber: data.serviceNumber || null }),
+      ...(data.departureCity !== undefined && { departureCity: data.departureCity }),
+      ...(data.arrivalCity !== undefined && { arrivalCity: data.arrivalCity }),
+      ...(data.departureTime !== undefined && { departureTime: data.departureTime ? new Date(data.departureTime) : null }),
+      ...(data.arrivalTime !== undefined && { arrivalTime: data.arrivalTime ? new Date(data.arrivalTime) : null }),
+      ...(data.bookingReference !== undefined && { bookingReference: data.bookingReference || null }),
+      ...(data.ticketNumber !== undefined && { ticketNumber: data.ticketNumber || null }),
+      ...(data.seatNumber !== undefined && { seatNumber: data.seatNumber || null }),
+      ...(data.baggageAllowance !== undefined && { baggageAllowance: data.baggageAllowance || null }),
+      ...(data.cost !== undefined && { cost: data.cost }),
+      ...(data.currency !== undefined && { currency: data.currency }),
+      ...(data.status !== undefined && { status: data.status }),
+      ...(data.notes !== undefined && { notes: data.notes || null }),
+      ...(data.crewMemberId !== undefined && { crewMemberId: data.crewMemberId }),
+    },
+  })
+
+  revalidatePath(`/tours/${tourId}/flights`)
 }
 
 export async function deleteTravelTicket(tourId: string, ticketId: string) {
@@ -329,7 +378,7 @@ export async function deleteTravelTicket(tourId: string, ticketId: string) {
 
   await prisma.travelTicket.delete({ where: { id: ticketId } })
 
-  revalidatePath(`/tours/${tourId}/travel-tickets`)
+  revalidatePath(`/tours/${tourId}/flights`)
 }
 
 // ─── CSV Import for Expenses ─────────────────────────────────

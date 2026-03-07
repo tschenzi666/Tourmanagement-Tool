@@ -691,6 +691,22 @@ model TravelTicket {
   status           String    @default("CONFIRMED") // CONFIRMED, CANCELLED, CHANGED
   notes            String?   @db.Text
 
+  // Live flight tracking (cached from AviationStack)
+  liveStatus         String?   // scheduled, active, landed, cancelled, incident, diverted
+  liveDelay          Int?      // delay in minutes
+  liveDepartureGate     String?
+  liveDepartureTerminal String?
+  liveArrivalGate       String?
+  liveArrivalTerminal   String?
+  liveArrivalBaggage    String?
+  liveScheduledDep   DateTime? // scheduled departure from API
+  liveEstimatedDep   DateTime? // estimated departure
+  liveActualDep      DateTime? // actual departure
+  liveScheduledArr   DateTime? // scheduled arrival from API
+  liveEstimatedArr   DateTime? // estimated arrival
+  liveActualArr      DateTime? // actual arrival
+  liveLastChecked    DateTime? // when we last fetched from API
+
   crewMemberId String
   tourId       String
 
