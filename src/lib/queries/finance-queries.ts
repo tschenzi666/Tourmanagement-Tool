@@ -7,6 +7,23 @@ export async function getTourExpenses(tourId: string) {
   })
 }
 
+export async function getTourTravelTicketCosts(tourId: string) {
+  return prisma.travelTicket.findMany({
+    where: {
+      tourId,
+      cost: { not: null },
+    },
+    include: {
+      crewMember: {
+        include: {
+          user: { select: { name: true } },
+        },
+      },
+    },
+    orderBy: { departureTime: "desc" },
+  })
+}
+
 export async function getExpense(expenseId: string) {
   return prisma.expense.findUnique({
     where: { id: expenseId },
@@ -43,7 +60,7 @@ export async function getTourShowRevenue(tourId: string) {
 }
 
 export async function getTourFinancialSummary(tourId: string) {
-  const [expenses, showDetails, budgetItems, crewMembers] = await Promise.all([
+  const [expenses, showDetails, budgetItems, crewMembers, travelTickets] = await Promise.all([
     prisma.expense.findMany({ where: { tourId } }),
     prisma.showDetails.findMany({
       where: { tourDay: { tourId } },
@@ -53,6 +70,9 @@ export async function getTourFinancialSummary(tourId: string) {
     prisma.tourCrewMember.findMany({
       where: { tourId, isActive: true },
       select: { dailyRate: true, perDiem: true },
+    }),
+    prisma.travelTicket.findMany({
+      where: { tourId, cost: { not: null } },
     }),
   ])
 
@@ -64,6 +84,18 @@ export async function getTourFinancialSummary(tourId: string) {
     totalExpenses += amount
     const current = expenseByCategory.get(exp.category) || 0
     expenseByCategory.set(exp.category, current + amount)
+  }
+
+  // Add travel ticket costs
+  let totalTravelTicketCosts = 0
+  for (const ticket of travelTickets) {
+    if (ticket.cost) {
+      const amount = Number(ticket.cost)
+      totalTravelTicketCosts += amount
+      totalExpenses += amount
+      const current = expenseByCategory.get("TRAVEL") || 0
+      expenseByCategory.set("TRAVEL", current + amount)
+    }
   }
 
   // Show revenue
@@ -115,5 +147,6 @@ export async function getTourFinancialSummary(tourId: string) {
     dailyCrewCost,
     dailyPerDiemCost,
     activeCrewCount: crewMembers.length,
+    totalTravelTicketCosts,
   }
 }

@@ -17,6 +17,7 @@ interface Expense {
   vendor: string | null
   notes: string | null
   isReimbursed: boolean
+  isTravelTicket?: boolean
 }
 
 const currencySymbols: Record<string, string> = {
@@ -74,33 +75,39 @@ export function ExpenseList({ expenses, tourId }: { expenses: Expense[]; tourId:
                 {symbol}{Number(expense.amount).toLocaleString(undefined, { minimumFractionDigits: 2 })}
               </p>
             </div>
-            <div className="flex gap-1">
-              <form action={toggleExpenseReimbursed.bind(null, tourId, expense.id)}>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-8 w-8"
-                  type="submit"
-                  title={expense.isReimbursed ? "Mark as not reimbursed" : "Mark as reimbursed"}
-                >
-                  {expense.isReimbursed ? (
-                    <X className="h-3.5 w-3.5 text-muted-foreground" />
-                  ) : (
-                    <Check className="h-3.5 w-3.5 text-green-600" />
-                  )}
-                </Button>
-              </form>
-              <form action={deleteExpense.bind(null, tourId, expense.id)}>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-8 w-8 text-destructive hover:text-destructive"
-                  type="submit"
-                >
-                  <Trash2 className="h-3.5 w-3.5" />
-                </Button>
-              </form>
-            </div>
+            {expense.isTravelTicket ? (
+              <Badge variant="outline" className="text-xs whitespace-nowrap">
+                Ticket
+              </Badge>
+            ) : (
+              <div className="flex gap-1">
+                <form action={toggleExpenseReimbursed.bind(null, tourId, expense.id)}>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8"
+                    type="submit"
+                    title={expense.isReimbursed ? "Mark as not reimbursed" : "Mark as reimbursed"}
+                  >
+                    {expense.isReimbursed ? (
+                      <X className="h-3.5 w-3.5 text-muted-foreground" />
+                    ) : (
+                      <Check className="h-3.5 w-3.5 text-green-600" />
+                    )}
+                  </Button>
+                </form>
+                <form action={deleteExpense.bind(null, tourId, expense.id)}>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8 text-destructive hover:text-destructive"
+                    type="submit"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </Button>
+                </form>
+              </div>
+            )}
           </div>
         )
       })}

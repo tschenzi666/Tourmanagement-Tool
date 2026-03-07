@@ -6,6 +6,7 @@ import {
   getTourBudgetItems,
   getTourShowRevenue,
   getTourFinancialSummary,
+  getTourTravelTicketCosts,
 } from "@/lib/queries/finance-queries"
 import { AddExpenseDialog } from "@/components/finances/add-expense-dialog"
 import { AddBudgetItemDialog } from "@/components/finances/add-budget-item-dialog"
@@ -51,11 +52,12 @@ export default async function FinancesPage({
 
   if (!tour) notFound()
 
-  const [expenses, budgetItems, showRevenue, summary] = await Promise.all([
+  const [expenses, budgetItems, showRevenue, summary, travelTickets] = await Promise.all([
     getTourExpenses(tourId),
     getTourBudgetItems(tourId),
     getTourShowRevenue(tourId),
     getTourFinancialSummary(tourId),
+    getTourTravelTicketCosts(tourId),
   ])
 
   const sym = currencySymbols[tour.currency] || tour.currency
@@ -222,20 +224,35 @@ export default async function FinancesPage({
                 <CardTitle className="flex items-center gap-2">
                   <Receipt className="h-5 w-5" />
                   Expenses
-                  {expenses.length > 0 && (
+                  {(expenses.length + travelTickets.length) > 0 && (
                     <Badge variant="secondary" className="ml-auto text-xs">
-                      {expenses.length} items
+                      {expenses.length + travelTickets.length} items
                     </Badge>
                   )}
                 </CardTitle>
               </CardHeader>
               <CardContent>
                 <ExpenseList
-                  expenses={expenses.map((e) => ({
-                    ...e,
-                    amount: Number(e.amount),
-                    date: new Date(e.date),
-                  }))}
+                  expenses={[
+                    ...expenses.map((e) => ({
+                      ...e,
+                      amount: Number(e.amount),
+                      date: new Date(e.date),
+                      isTravelTicket: false as const,
+                    })),
+                    ...travelTickets.map((t) => ({
+                      id: t.id,
+                      description: `${t.ticketType}: ${t.departureCity} → ${t.arrivalCity}${t.crewMember?.user?.name ? ` (${t.crewMember.user.name})` : ""}`,
+                      amount: Number(t.cost),
+                      currency: t.currency,
+                      category: "TRAVEL",
+                      date: t.departureTime ? new Date(t.departureTime) : new Date(t.createdAt),
+                      vendor: t.carrier,
+                      notes: t.bookingReference ? `Ref: ${t.bookingReference}` : null,
+                      isReimbursed: false,
+                      isTravelTicket: true as const,
+                    })),
+                  ].sort((a, b) => b.date.getTime() - a.date.getTime())}
                   tourId={tourId}
                 />
               </CardContent>
