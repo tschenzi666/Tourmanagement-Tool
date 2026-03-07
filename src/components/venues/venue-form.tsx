@@ -142,7 +142,7 @@ export function VenueForm({
               </div>
               <div className="space-y-2">
                 <Label htmlFor="venueType">Venue Type</Label>
-                <Select name="venueType" defaultValue={venue?.venueType ?? ""}>
+                <Select name="venueType" defaultValue={venue?.venueType ?? undefined}>
                   <SelectTrigger>
                     <SelectValue placeholder="Select type" />
                   </SelectTrigger>

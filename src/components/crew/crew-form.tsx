@@ -52,7 +52,7 @@ function formatDate(date: Date | null): string {
 
 export function CrewForm({ action, crewMember, submitLabel = "Add Crew Member" }: CrewFormProps) {
   const [selectedRole, setSelectedRole] = useState(crewMember?.role || "OTHER")
-  const [department, setDepartment] = useState(crewMember?.department || "")
+  const [department, setDepartment] = useState(crewMember?.department || undefined as string | undefined)
 
   const handleRoleChange = (role: string) => {
     setSelectedRole(role)
@@ -100,7 +100,7 @@ export function CrewForm({ action, crewMember, submitLabel = "Add Crew Member" }
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label htmlFor="department">Department</Label>
-              <Select name="department" value={department} onValueChange={setDepartment}>
+              <Select name="department" value={department} onValueChange={(v) => setDepartment(v)}>
                 <SelectTrigger>
                   <SelectValue placeholder="Select department" />
                 </SelectTrigger>
@@ -206,7 +206,7 @@ export function CrewForm({ action, crewMember, submitLabel = "Add Crew Member" }
             </div>
             <div className="space-y-2">
               <Label htmlFor="tShirtSize">T-Shirt Size</Label>
-              <Select name="tShirtSize" defaultValue={crewMember?.tShirtSize ?? ""}>
+              <Select name="tShirtSize" defaultValue={crewMember?.tShirtSize ?? undefined}>
                 <SelectTrigger>
                   <SelectValue placeholder="Select size" />
                 </SelectTrigger>
