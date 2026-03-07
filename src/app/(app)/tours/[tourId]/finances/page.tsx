@@ -28,6 +28,7 @@ import {
   Music,
   CheckCircle2,
   Clock,
+  ShoppingBag,
 } from "lucide-react"
 
 const currencySymbols: Record<string, string> = {
@@ -59,7 +60,8 @@ export default async function FinancesPage({
   ])
 
   const sym = currencySymbols[tour.currency] || tour.currency
-  const netIncome = summary.totalGuarantees - summary.totalExpenses
+  const totalIncome = summary.totalGuarantees + summary.totalMerchPosRevenue
+  const netIncome = totalIncome - summary.totalExpenses
 
   // Calculate tour duration for crew cost projections
   let tourDays = 11 // default
@@ -104,9 +106,9 @@ export default async function FinancesPage({
                 </div>
                 <div>
                   <p className="text-2xl font-bold">
-                    {sym}{summary.totalGuarantees.toLocaleString(undefined, { minimumFractionDigits: 0 })}
+                    {sym}{totalIncome.toLocaleString(undefined, { minimumFractionDigits: 0 })}
                   </p>
-                  <p className="text-xs text-muted-foreground">Show Revenue</p>
+                  <p className="text-xs text-muted-foreground">Total Income</p>
                 </div>
               </div>
             </CardContent>
@@ -350,6 +352,31 @@ export default async function FinancesPage({
                 )}
               </CardContent>
             </Card>
+
+            {/* Merch Revenue */}
+            {summary.totalMerchPosRevenue > 0 && (
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <ShoppingBag className="h-5 w-5" />
+                    Merch Revenue
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-2">
+                    <div className="flex justify-between text-sm">
+                      <span className="text-muted-foreground">POS Sales</span>
+                      <span className="font-semibold text-green-600">
+                        +{sym}{summary.totalMerchPosRevenue.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                      </span>
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      Revenue from the Merch POS system. Included in total income.
+                    </p>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
 
             {/* Show Settlement Summary */}
             <Card>

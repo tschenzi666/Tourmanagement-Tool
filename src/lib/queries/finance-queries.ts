@@ -43,7 +43,7 @@ export async function getTourShowRevenue(tourId: string) {
 }
 
 export async function getTourFinancialSummary(tourId: string) {
-  const [expenses, showDetails, budgetItems, crewMembers] = await Promise.all([
+  const [expenses, showDetails, budgetItems, crewMembers, merchSales] = await Promise.all([
     prisma.expense.findMany({ where: { tourId } }),
     prisma.showDetails.findMany({
       where: { tourDay: { tourId } },
@@ -53,6 +53,10 @@ export async function getTourFinancialSummary(tourId: string) {
     prisma.tourCrewMember.findMany({
       where: { tourId, isActive: true },
       select: { dailyRate: true, perDiem: true },
+    }),
+    prisma.merchSale.findMany({
+      where: { tourId },
+      select: { totalPrice: true },
     }),
   ])
 
@@ -99,6 +103,12 @@ export async function getTourFinancialSummary(tourId: string) {
     if (member.perDiem) dailyPerDiemCost += Number(member.perDiem)
   }
 
+  // Merch POS revenue
+  let totalMerchPosRevenue = 0
+  for (const sale of merchSales) {
+    totalMerchPosRevenue += Number(sale.totalPrice)
+  }
+
   return {
     totalExpenses,
     expenseByCategory: Object.fromEntries(expenseByCategory),
@@ -106,6 +116,7 @@ export async function getTourFinancialSummary(tourId: string) {
     totalGuarantees,
     totalGrossRevenue,
     totalMerchSales,
+    totalMerchPosRevenue,
     totalDeductions,
     settledShows,
     totalShows: showDetails.length,

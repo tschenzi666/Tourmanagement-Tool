@@ -182,6 +182,8 @@ model Tour {
   budgetItems    BudgetItem[]
   travelTickets  TravelTicket[]
   votingSessions VotingSession[]
+  merchProducts  MerchProduct[]
+  merchSales     MerchSale[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -232,6 +234,7 @@ model TourDay {
   hotelStay      HotelStay?
   guestListItems GuestListItem[]
   dayNotes       DayNote[]
+  merchSales     MerchSale[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -790,6 +793,78 @@ model BudgetItem {
 
   @@index([tourId])
   @@map("budget_items")
+}
+
+// ============================================================
+// MERCH / POS
+// ============================================================
+
+enum MerchProductCategory {
+  TSHIRT
+  HOODIE
+  HAT
+  POSTER
+  VINYL
+  CD
+  STICKER
+  BAG
+  ACCESSORY
+  OTHER
+}
+
+enum PaymentMethod {
+  CASH
+  CARD
+  MIXED
+}
+
+model MerchProduct {
+  id          String               @id @default(cuid())
+  name        String
+  category    MerchProductCategory @default(OTHER)
+  price       Decimal              @db.Decimal(10, 2)
+  cost        Decimal?             @db.Decimal(10, 2)
+  sizes       String?              // comma-separated: S,M,L,XL
+  stock       Int?
+  isActive    Boolean              @default(true)
+  sortOrder   Int                  @default(0)
+
+  tourId String
+
+  tour  Tour        @relation(fields: [tourId], references: [id], onDelete: Cascade)
+  sales MerchSale[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([tourId])
+  @@map("merch_products")
+}
+
+model MerchSale {
+  id            String        @id @default(cuid())
+  quantity      Int           @default(1)
+  unitPrice     Decimal       @db.Decimal(10, 2)
+  totalPrice    Decimal       @db.Decimal(10, 2)
+  size          String?
+  paymentMethod PaymentMethod @default(CASH)
+  notes         String?
+
+  productId String
+  tourId    String
+  tourDayId String?
+
+  product MerchProduct @relation(fields: [productId], references: [id], onDelete: Cascade)
+  tour    Tour         @relation(fields: [tourId], references: [id], onDelete: Cascade)
+  tourDay TourDay?     @relation(fields: [tourDayId], references: [id])
+
+  createdAt DateTime @default(now())
+
+  @@index([tourId])
+  @@index([tourDayId])
+  @@index([productId])
+  @@index([createdAt])
+  @@map("merch_sales")
 }
 
 // ============================================================
