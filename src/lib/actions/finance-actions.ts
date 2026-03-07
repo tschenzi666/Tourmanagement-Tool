@@ -4,7 +4,6 @@ import { prisma } from "@/lib/prisma"
 import { auth } from "@/lib/auth"
 import { createExpenseSchema, createBudgetItemSchema } from "@/lib/validations/finance"
 import { revalidatePath } from "next/cache"
-import { redirect } from "next/navigation"
 
 async function requireAuth() {
   const session = await auth()
@@ -45,7 +44,6 @@ export async function createExpense(tourId: string, formData: FormData) {
   })
 
   revalidatePath(`/tours/${tourId}/finances`)
-  redirect(`/tours/${tourId}/finances`)
 }
 
 export async function updateExpense(tourId: string, expenseId: string, formData: FormData) {
